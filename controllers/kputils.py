@@ -11,14 +11,72 @@ dict_tc_to_sec = {"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
 
 dict_demodv = {"X":"X.","Y":"Y.","Phase":"PHA.","R":"MAG."}
 dict_sens = {"1pA":"15","2pA":"16","5pA":"17","10pA":"18","20pA":"19","50pA":"20"}
-rm = pyvisa.ResourceManager('C:/Windows/System32/visa32.dll') # 32 bit windows
+# controllers/kputils.py
+import os
+import pyvisa
+
+from config.settings import RS232_PORT_NAME,BAUD_RATE
+# Try to read config; default to "auto" if missing
+try:
+    from config.settings import VISA_LIBRARY
+except Exception:
+    VISA_LIBRARY = "auto"
+
+_rm = None  # private singleton
+
+def get_rm():
+    """
+    Return a shared pyvisa.ResourceManager, created lazily.
+    Respects (highest priority first):
+    1) Environment variable PYVISA_LIBRARY
+    2) config.settings.VISA_LIBRARY (if not 'auto')
+    3) Common Windows DLLs, '@py' backend, then pyvisa default()
+    """
+    global _rm
+    if _rm is not None:
+        return _rm
+
+    # 1) Environment override
+    env_lib = os.getenv("PYVISA_LIBRARY")
+
+    # 2) Config value
+    cfg_lib = None if VISA_LIBRARY in (None, "", "auto") else VISA_LIBRARY
+
+    # Build candidate list in order
+    candidates = [
+        env_lib,
+        cfg_lib,
+        r"C:/Windows/System32/visa32.dll",
+        r"C:/Windows/System32/visa64.dll",
+        "@py",  # PyVISA-py backend
+        None,   # pyvisa default discovery
+    ]
+
+    last_err = None
+    for lib in candidates:
+        try:
+            _rm = pyvisa.ResourceManager(lib) if lib is not None else pyvisa.ResourceManager()
+            # success
+            break
+        except Exception as e:
+            last_err = e
+            _rm = None
+
+    if _rm is None and last_err is not None:
+        # surface a clear error if nothing worked
+        raise RuntimeError(f"Could not initialize VISA ResourceManager. Last error: {last_err}")
+
+    return _rm
+
+# Backward compatibility: keep a module-level 'rm' like before
+rm = get_rm()
 
 # opens a connection to the lock-in via RS232 of sPort, sBaudRate (strings)
-def Connection_Open_RS232(sPort, sBaudRate,rm,verbose = True):
+def Connection_Open_RS232(rm,verbose = True):
     if verbose:
         print('Open connection via RS232')
-    inst = rm.open_resource(sPort)
-    inst.baud_rate = int(sBaudRate)
+    inst = rm.open_resource(RS232_PORT_NAME)
+    inst.baud_rate = int(BAUD_RATE)
     inst.parity = Parity.even
     inst.data_bits = 7
     return inst
@@ -174,7 +232,7 @@ def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
 
 def update_RP(expobj,rm):
     
-    inst = Connection_Open_RS232(expobj.port, "9600",rm,verbose = False)
+    inst = Connection_Open_RS232(rm,verbose = False)
     dataMag,temp = Inst_Query_Command_RS232(inst, "MAG." ,verbose = False)
     dataPhi,temp = Inst_Query_Command_RS232(inst, "PHA.",verbose = False)
     Connection_Close(inst,verbose = False)        
@@ -190,7 +248,7 @@ def V_to_index(x_V):
     
 def setLockinParams(expobj,rm):
 
-    inst = Connection_Open_RS232(expobj.port, "9600",rm)
+    inst = Connection_Open_RS232(rm)
     
     Inst_Query_Command_RS232(inst, "TC"+dict_tc.get( expobj.timeconstant ), verbose = False)
     Inst_Query_Command_RS232(inst, "SEN"+dict_sens.get(expobj.sensitivity ), verbose = False)
@@ -247,7 +305,7 @@ def freqSweep(indxs,expobj,rm):
     time_cte = dict_tc.get( expobj.timeconstant )
     tc_sec     = dict_tc_to_sec.get(expobj.timeconstant)
     sens     = dict_sens.get(expobj.sensitivity )
-    inst = Connection_Open_RS232(expobj.port, "9600",rm)
+    inst = Connection_Open_RS232(rm)
     
     #print("Starting dac scan.. \n")
     #print("Centering phase, zeroing dac1...\n")
