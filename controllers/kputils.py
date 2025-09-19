@@ -65,7 +65,6 @@ def get_rm():
     return _rm
 
 # Backward compatibility: keep a module-level 'rm' like before
-rm = get_rm()
 
 # opens a connection to the lock-in via RS232 of sPort, sBaudRate (strings)
 def Connection_Open_RS232(rm,verbose = True):
@@ -246,8 +245,8 @@ def setLockinParams(expobj,rm):
 
     inst = Connection_Open_RS232(rm)
 
-    Inst_Query_Command_RS232(inst, "TC"+constants.DICT_TC.get( expobj.timeconstant ), verbose = False)
-    Inst_Query_Command_RS232(inst, "SEN"+constants.DICT_SENS.get(expobj.sensitivity ), verbose = False)
+    Inst_Query_Command_RS232(inst, "TC"+ str( constants.DICT_TC_TO_SEC.get( expobj.timeconstant )), verbose = False)
+    Inst_Query_Command_RS232(inst, "SEN"+str( constants.DICT_SENS.get(expobj.sensitivity ) ), verbose = False)
     Inst_Query_Command_RS232(inst, "OF."+str(expobj.freq), verbose = False)
     Inst_Query_Command_RS232(inst, "OA."+str(expobj.amp), verbose = False)
 
