@@ -6,11 +6,7 @@ import lmfit
 #import matplotlib.pyplot as plt
 #from tqdm.notebook import tqdm
 import pandas as pd
-dict_tc = {"20ms":"10","50ms":"11","100ms":"12","500ms":"13","1s":"14"}
-dict_tc_to_sec = {"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
-
-dict_demodv = {"X":"X.","Y":"Y.","Phase":"PHA.","R":"MAG."}
-dict_sens = {"1pA":"15","2pA":"16","5pA":"17","10pA":"18","20pA":"19","50pA":"20"}
+import config.constants as constants
 # controllers/kputils.py
 import os
 import pyvisa
@@ -213,12 +209,12 @@ def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
         time.sleep(1)
 
     else:
-        time.sleep(tcRatio*dict_tc_to_sec.get(expobj.timeconstant)) 
+        time.sleep(tcRatio*constants.DICT_TC_TO_SEC.get(expobj.timeconstant)) 
 
     datai = []
-    dataMag,temp = Inst_Query_Command_RS232(inst, dict_demodv.get(expobj.demod1) ,verbose = False)
-    dataPhi,temp = Inst_Query_Command_RS232(inst, dict_demodv.get(expobj.demod2),verbose = False)
-    
+    dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMODV.get(expobj.demod1) ,verbose = False)
+    dataPhi,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMODV.get(expobj.demod2),verbose = False)
+
     if i <int(len(list_volts)/2):
         datai.append(-float( list_volts[i][1:] ))
     else:
@@ -249,9 +245,9 @@ def V_to_index(x_V):
 def setLockinParams(expobj,rm):
 
     inst = Connection_Open_RS232(rm)
-    
-    Inst_Query_Command_RS232(inst, "TC"+dict_tc.get( expobj.timeconstant ), verbose = False)
-    Inst_Query_Command_RS232(inst, "SEN"+dict_sens.get(expobj.sensitivity ), verbose = False)
+
+    Inst_Query_Command_RS232(inst, "TC"+constants.DICT_TC.get( expobj.timeconstant ), verbose = False)
+    Inst_Query_Command_RS232(inst, "SEN"+constants.DICT_SENS.get(expobj.sensitivity ), verbose = False)
     Inst_Query_Command_RS232(inst, "OF."+str(expobj.freq), verbose = False)
     Inst_Query_Command_RS232(inst, "OA."+str(expobj.amp), verbose = False)
 
@@ -302,9 +298,9 @@ def fitLinear(expobj,vi,vf):
 
 
 def freqSweep(indxs,expobj,rm):
-    time_cte = dict_tc.get( expobj.timeconstant )
-    tc_sec     = dict_tc_to_sec.get(expobj.timeconstant)
-    sens     = dict_sens.get(expobj.sensitivity )
+    time_cte = constants.DICT_TC.get( expobj.timeconstant )
+    tc_sec     = constants.DICT_TC_TO_SEC.get(expobj.timeconstant)
+    sens     = constants.DICT_SENS.get(expobj.sensitivity )
     inst = Connection_Open_RS232(rm)
     
     #print("Starting dac scan.. \n")
@@ -329,7 +325,7 @@ def freqSweep(indxs,expobj,rm):
         else:
             time.sleep(3*tc_sec)  
 
-        dataMag,temp = Inst_Query_Command_RS232(inst, dict_demodv.get(expobj.demod1) ,verbose = False)
+        dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMODV.get(expobj.demod1) ,verbose = False)
         count +=1        
 
         datai.append(freqi)

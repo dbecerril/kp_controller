@@ -20,165 +20,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QTimer,QThread,pyqtSignal,QObject
 from PyQt5 import QtGui
 from tabs import sweeptab,exptab,lockintab
-list_voltsp = [  "+"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(10) for h in range(10) for i in range(10) for j in range(10) for k in range(10)]
-list_voltsn = [  "-"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(9,-1,-1) for h in range(9,-1,-1) for i in range(9,-1,-1) for j in range(9,-1,-1) for k in range(9,-1,-1)]
-list_volts = list_voltsn + list_voltsp
-
-dict_tc = {"20ms":"10","50ms":"11","100ms":"12","500ms":"13","1s":"14"}
-dict_demodv = {"X":"X.","Y.":"Y","Phase":"PHA.","R":"MAG."}
-dict_sens = {"1pA":"15","2pA":"16","5pA":"17","10pA":"18","20pA":"19","50pA":"20"}
-delaytimer  = 500
-dict_tc_to_sec = {"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
+from config import constants
+DICT_TC_TO_SEC = constants.DICT_TC_TO_SEC
+from threads.scan_worker import Worker
 
 # Step 1: Create a worker class
 # We work with the average curve and single curve
-class Worker(QObject) :
-    finished     = pyqtSignal()
-    updategraph2 = pyqtSignal(object)
-    update       = pyqtSignal(object)
-    # used to clear single plot but has to send avg plot
-    # so replots avg plot.
-    clearsinglecurve   = pyqtSignal(object)
-    clearplot    = pyqtSignal()
-    sendfinaldata = pyqtSignal(object)
-
-    def __init__(self,expobj,rm,scan_options ):
-        QObject.__init__(self)
-        self.expobj = expobj
-        self.rm = rm
-        self.multiscan = scan_options[0]
-        self.avgmultiscan = scan_options[1]
-        self.numpass = scan_options[2]
-        self.savedata = scan_options[3]
-        self.terminate = False
-        self.timebetweenscans = scan_options[4]
-
-    def listen(self):
-        if self.terminate == False:
-            self.terminate = True
-
-    def fitdata(self):
-        
-        x,y0,y,res,gradient= kputils.fitLinear(self.expobj, 
-                                        float(self.expobj.scanparams[0]/2), 
-                                        float( self.expobj.scanparams[1]/2) )
-        #self.experimentTabUI.label_fittedGradient.setText(f"gradient: {np.round(gradient,3)} ")
-        return res,gradient
-                
-    def stampData(self,df0,path0,start_time):
-        f = open(path0, 'a')
-        timestamp = (time.time()-start_time )
-
-        f.write(f'# {timestamp} secs \n')
-        exp_dict  = self.expobj.getSettings()
-        for keys,values in exp_dict.items():
-            f.write(f'# {keys} : {values} \n')
-        df0.to_csv(f)
-
-        f.close()
-    def lockGradient(self,gradient0):
-        inst     = kputils.Connection_Open_RS232(self.expobj.port, "9600",self.rm)
-        tcRatio = 1
-        kputils.Inst_Query_Command_RS232(inst, "AQN", verbose = False)
-        kputils.Inst_Query_Command_RS232(inst, "DAC1+00000", verbose = False)
-        scanrange = list( np.arange(kputils.V_to_index( float(self.expobj.scanparams[0]/2)),
-                                    kputils.V_to_index(float(self.expobj.scanparams[1]/2)),
-                                    int( float(self.expobj.scanparams[2])*1000) )
-                                    )
-
-
-        nn = 0
-        crit = 0.1
-        while nn < 10 and np.abs(gradi) - gradient0 > crit:
-            
-            if np.abs(gradi) > gradient0:
-                a =1
-            else:
-                a =2
-
-            datai = []
-            count = 0
-            for i in scanrange:
-                if self.terminate == True:
-                    break
-                datai.append( kputils.dacScanStep(i,self.expobj,inst,tcRatio,count) )
-                self.update.emit(datai)
-                count +=1        
-            resi,gradi = self.fitdata(np.array(datai).reshape(-1,3) )
-
-
-    def run(self):
-        path0 = ".\\kpoutput\\" + f"{self.expobj.name}\\"
-        if self.savedata:
-            try:
-                os.mkdir(path0)
-            except:
-                self.terminate = True
-
-        inst     = kputils.Connection_Open_RS232(self.expobj.port, "9600",self.rm)
-        start_time = time.time()
-        kputils.Inst_Query_Command_RS232(inst, "DAC1+00000", verbose = False)
-        scanrange = list( np.arange(kputils.V_to_index( float(self.expobj.scanparams[0])),
-                                    kputils.V_to_index(float(self.expobj.scanparams[1])),
-                                    int( float(self.expobj.scanparams[2])*1000) )
-                                    )
-        
-        tcsec = dict_tc_to_sec.get(self.expobj.timeconstant)
-
-        """Long-running task."""
-        dataout = np.zeros((len(scanrange),3) )
-
-        numpass = 1
-
-        if self.multiscan:
-            numpass = self.numpass
-
-       
-        for ii in range(numpass):
-            datai = []
-            
-            tcRatio = 1
-            
-            self.clearplot.emit()
-            if self.terminate == True:
-                break
-            count = 0
-
-            for i in scanrange:
-
-                if self.terminate == True:
-                    break
-                datai.append( kputils.dacScanStep(i,self.expobj,inst,tcRatio,count) )
-                self.update.emit(datai)
-                count += 1
-
-
-            if self.terminate != True:
-                datai = np.array(datai).reshape(-1,3)         
-                dataout = datai
-                self.sendfinaldata.emit(dataout)
-                self.updategraph2.emit(time.time()-start_time)
-
-                if self.savedata:
-                    datacsv = pd.DataFrame( dataout,columns = ["DAC1 (V)",self.expobj.demod1,self.expobj.demod2] )
-                    self.stampData(datacsv,path0 + self.expobj.name + f"scan_{ii}.csv",start_time)
-            
-            if self.multiscan:
-                time.sleep(float(self.timebetweenscans))
-            
-
-        #if self.savedata and self.terminate != True:         
-        #    datacsv = pd.DataFrame( dataout,columns = ["DAC1 (V)",self.expobj.demod1,self.expobj.demod2] )
-        #    self.stampData(datacsv,path0 + self.expobj.name + f"scan_{ii}.csv",start_time)
-
-
-
-        self.clearsinglecurve.emit(dataout)
-        self.terminate = False
-        kputils.Inst_Query_Command_RS232(inst, "DAC1+00000", verbose = False)
-        kputils.Connection_Close(inst)    
-        self.finished.emit()
-
     
 class Window(QWidget):
     signalWorker     = pyqtSignal()
@@ -255,7 +102,7 @@ class Window(QWidget):
         # Bottom widget
         self.timer = QTimer(self)
         self.timer.timeout.connect( self.updateMeasure )
-        self.timer.start(delaytimer) 
+        self.timer.start(constants.DELAY_TIMER_MS) 
         
         self.label_currentR = QLabel("0.0")
         self.label_currentPhi = QLabel("0.0")
@@ -296,7 +143,7 @@ class Window(QWidget):
 
         kputils.setLockinParams(self.expsettings,self.rm)
         
-        self.timer.start(delaytimer) 
+        self.timer.start(constants.DELAY_TIMER_MS) 
 
    
 
@@ -366,7 +213,7 @@ class Window(QWidget):
             lambda: self.experimentTabUI.button_start.setEnabled(True)
         )
         self.thread.finished.connect(
-            lambda: self.timer.start(delaytimer)
+            lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
 
 
@@ -495,7 +342,7 @@ class Window(QWidget):
             lambda: self.sweepTabUI.button_start.setEnabled(True)
         )
         self.thread.finished.connect(
-            lambda: self.timer.start(delaytimer)
+            lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
                     
 
