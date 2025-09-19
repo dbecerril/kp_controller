@@ -11,7 +11,64 @@ dict_tc_to_sec = {"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
 
 dict_demodv = {"X":"X.","Y":"Y.","Phase":"PHA.","R":"MAG."}
 dict_sens = {"1pA":"15","2pA":"16","5pA":"17","10pA":"18","20pA":"19","50pA":"20"}
-rm = pyvisa.ResourceManager('C:/Windows/System32/visa32.dll') # 32 bit windows
+# controllers/kputils.py
+import os
+import pyvisa
+
+# Try to read config; default to "auto" if missing
+try:
+    from config.settings import VISA_LIBRARY
+except Exception:
+    VISA_LIBRARY = "auto"
+
+_rm = None  # private singleton
+
+def get_rm():
+    """
+    Return a shared pyvisa.ResourceManager, created lazily.
+    Respects (highest priority first):
+    1) Environment variable PYVISA_LIBRARY
+    2) config.settings.VISA_LIBRARY (if not 'auto')
+    3) Common Windows DLLs, '@py' backend, then pyvisa default()
+    """
+    global _rm
+    if _rm is not None:
+        return _rm
+
+    # 1) Environment override
+    env_lib = os.getenv("PYVISA_LIBRARY")
+
+    # 2) Config value
+    cfg_lib = None if VISA_LIBRARY in (None, "", "auto") else VISA_LIBRARY
+
+    # Build candidate list in order
+    candidates = [
+        env_lib,
+        cfg_lib,
+        r"C:/Windows/System32/visa32.dll",
+        r"C:/Windows/System32/visa64.dll",
+        "@py",  # PyVISA-py backend
+        None,   # pyvisa default discovery
+    ]
+
+    last_err = None
+    for lib in candidates:
+        try:
+            _rm = pyvisa.ResourceManager(lib) if lib is not None else pyvisa.ResourceManager()
+            # success
+            break
+        except Exception as e:
+            last_err = e
+            _rm = None
+
+    if _rm is None and last_err is not None:
+        # surface a clear error if nothing worked
+        raise RuntimeError(f"Could not initialize VISA ResourceManager. Last error: {last_err}")
+
+    return _rm
+
+# Backward compatibility: keep a module-level 'rm' like before
+rm = get_rm()
 
 # opens a connection to the lock-in via RS232 of sPort, sBaudRate (strings)
 def Connection_Open_RS232(sPort, sBaudRate,rm,verbose = True):
