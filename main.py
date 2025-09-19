@@ -20,15 +20,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QTimer,QThread,pyqtSignal,QObject
 from PyQt5 import QtGui
 from tabs import sweeptab,exptab,lockintab
-list_voltsp = [  "+"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(10) for h in range(10) for i in range(10) for j in range(10) for k in range(10)]
-list_voltsn = [  "-"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(9,-1,-1) for h in range(9,-1,-1) for i in range(9,-1,-1) for j in range(9,-1,-1) for k in range(9,-1,-1)]
-list_volts = list_voltsn + list_voltsp
-
-dict_tc = {"20ms":"10","50ms":"11","100ms":"12","500ms":"13","1s":"14"}
-dict_demodv = {"X":"X.","Y.":"Y","Phase":"PHA.","R":"MAG."}
-dict_sens = {"1pA":"15","2pA":"16","5pA":"17","10pA":"18","20pA":"19","50pA":"20"}
-delaytimer  = 500
-dict_tc_to_sec = {"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
+from config import constants
+DICT_TC_TO_SEC = constants.DICT_TC_TO_SEC
 
 # Step 1: Create a worker class
 # We work with the average curve and single curve
@@ -77,7 +70,7 @@ class Worker(QObject) :
 
         f.close()
     def lockGradient(self,gradient0):
-        inst     = kputils.Connection_Open_RS232(self.expobj.port, "9600",self.rm)
+        inst     = kputils.Connection_Open_RS232(self.rm)
         tcRatio = 1
         kputils.Inst_Query_Command_RS232(inst, "AQN", verbose = False)
         kputils.Inst_Query_Command_RS232(inst, "DAC1+00000", verbose = False)
@@ -115,7 +108,7 @@ class Worker(QObject) :
             except:
                 self.terminate = True
 
-        inst     = kputils.Connection_Open_RS232(self.expobj.port, "9600",self.rm)
+        inst     = kputils.Connection_Open_RS232(self.rm)
         start_time = time.time()
         kputils.Inst_Query_Command_RS232(inst, "DAC1+00000", verbose = False)
         scanrange = list( np.arange(kputils.V_to_index( float(self.expobj.scanparams[0])),
@@ -123,7 +116,7 @@ class Worker(QObject) :
                                     int( float(self.expobj.scanparams[2])*1000) )
                                     )
         
-        tcsec = dict_tc_to_sec.get(self.expobj.timeconstant)
+        tcsec = DICT_TC_TO_SEC.get(self.expobj.timeconstant)
 
         """Long-running task."""
         dataout = np.zeros((len(scanrange),3) )
@@ -255,7 +248,7 @@ class Window(QWidget):
         # Bottom widget
         self.timer = QTimer(self)
         self.timer.timeout.connect( self.updateMeasure )
-        self.timer.start(delaytimer) 
+        self.timer.start(constants.DELAY_TIMER_MS) 
         
         self.label_currentR = QLabel("0.0")
         self.label_currentPhi = QLabel("0.0")
@@ -296,7 +289,7 @@ class Window(QWidget):
 
         kputils.setLockinParams(self.expsettings,self.rm)
         
-        self.timer.start(delaytimer) 
+        self.timer.start(constants.DELAY_TIMER_MS) 
 
    
 
@@ -366,7 +359,7 @@ class Window(QWidget):
             lambda: self.experimentTabUI.button_start.setEnabled(True)
         )
         self.thread.finished.connect(
-            lambda: self.timer.start(delaytimer)
+            lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
 
 
@@ -495,7 +488,7 @@ class Window(QWidget):
             lambda: self.sweepTabUI.button_start.setEnabled(True)
         )
         self.thread.finished.connect(
-            lambda: self.timer.start(delaytimer)
+            lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
                     
 

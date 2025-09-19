@@ -13,7 +13,17 @@ DICT_SENS = {  # example current sensitivities; swap with your exact table
     "1pA": 1e-12, "2pA": 2e-12, "5pA": 5e-12, "10pA": 1e-11,
     "20pA": 2e-11, "50pA": 5e-11, "100pA": 1e-10, "200pA": 2e-10
 }
-DEMOD_OPTIONS = ["X", "Y", "R", "Theta", "Phase"]
+
+DICT_DEMOD_OPTIONS = {"X":"X.","Y":"Y.","Phase":"PHA.","R":"MAG."}
+
+DICT_TC_TO_SEC = {"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
+
+
+LIST_VOLTSP = [  "+"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(10) for h in range(10) for i in range(10) for j in range(10) for k in range(10)]
+LIST_VOLTSN = [  "-"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(9,-1,-1) for h in range(9,-1,-1) for i in range(9,-1,-1) for j in range(9,-1,-1) for k in range(9,-1,-1)]
+LIST_VOLTS= LIST_VOLTSN + LIST_VOLTSP
+
+
 
 # ---- App defaults used by tabs ----
 DEFAULT_FREQ_HZ = 180.0
@@ -23,3 +33,4 @@ DEFAULT_SCAN    = [-0.300, 0.300, 0.01]  # start, stop, step
 DEFAULT_NUMPASS = 1
 
 # Any other constants your code expects from `constants.py`
+DELAY_TIMER_MS = 500
