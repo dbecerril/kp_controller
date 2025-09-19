@@ -211,8 +211,8 @@ def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
         time.sleep(tcRatio*constants.DICT_TC_TO_SEC.get(expobj.timeconstant)) 
 
     datai = []
-    dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMODV.get(expobj.demod1) ,verbose = False)
-    dataPhi,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMODV.get(expobj.demod2),verbose = False)
+    dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMOD_OPTIONS.get(expobj.demod1) ,verbose = False)
+    dataPhi,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMOD_OPTIONS.get(expobj.demod2),verbose = False)
 
     if i <int(len(list_volts)/2):
         datai.append(-float( list_volts[i][1:] ))
@@ -324,7 +324,7 @@ def freqSweep(indxs,expobj,rm):
         else:
             time.sleep(3*tc_sec)  
 
-        dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMODV.get(expobj.demod1) ,verbose = False)
+        dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMOD_OPTIONS.get(expobj.demod1) ,verbose = False)
         count +=1        
 
         datai.append(freqi)

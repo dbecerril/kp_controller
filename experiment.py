@@ -1,18 +1,18 @@
 import pandas as pd
-
+import config.settings as settings
 
 class experiment:
 
     def __init__(self):
-        self.timeconstant = "20ms"
-        self.sensitivity  = "20pA"
-        self.demod1       = "X"
-        self.demod2       = "Phase"
-        self.freq         = 180
-        self.amp          = 0.25
+        self.timeconstant = settings.INITIAL_TIME_CONSTANT
+        self.sensitivity  = settings.INITIAL_SENSITIVITY
+        self.demod1       = settings.INITIAL_DEMOD1
+        self.demod2       = settings.INITIAL_DEMOD2
+        self.freq         = settings.INITIAL_FREQ_HZ
+        self.amp          = settings.INITIAL_AMP_V
         self.name         = " "
-        self.port         = "ASRL5::INSTR"
-        self.scanparams   = [-3.00,3.00,0.1]
+        self.port         = settings.RS232_PORT_NAME
+        self.scanparams   = settings.INITIAL_SCAN_PARAMS
         self.numpass      = 1
         self.data         = []
         self.datanotes    = []
