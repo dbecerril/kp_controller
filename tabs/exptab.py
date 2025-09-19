@@ -13,14 +13,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,QFormLayout,QGroupBox,
     QWidget,QComboBox,QHBoxLayout
 )
+import config.constants as constants
 
-dict_tc = {"20ms":"10","50ms":"11","100ms":"12","500ms":"13","1s":"14"}
-dict_demodv = {"X":"X.","Y":"Y.","Phase":"PHA.","R":"MAG."}
-dict_sens = {"1pA":"15","2pA":"16","5pA":"17"}
-delaytimer  = 500
-list_voltsp = [  "+"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(10) for h in range(10) for i in range(10) for j in range(10) for k in range(10)]
-list_voltsn = [  "-"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(9,-1,-1) for h in range(9,-1,-1) for i in range(9,-1,-1) for j in range(9,-1,-1) for k in range(9,-1,-1)]
-list_volts = list_voltsn + list_voltsp
+
 
 
 class expTab(QWidget):
@@ -51,13 +46,13 @@ class expTab(QWidget):
         groupBox.setLayout(fbox_sp)
 
         self.box_eVi = QLineEdit(self)
-        self.box_eVi.setText("-0.30")
+        self.box_eVi.setText(str(self.expobj.scanparams[0]) )
         
         self.box_eVf = QLineEdit(self)
-        self.box_eVf.setText("0.30")
-        
+        self.box_eVf.setText(str(self.expobj.scanparams[1]))
+
         self.box_eVstep = QLineEdit(self)
-        self.box_eVstep.setText(".010")
+        self.box_eVstep.setText(str(self.expobj.scanparams[2]))
         
         hbox.addWidget(QLabel("Vi"))
         hbox.addWidget(self.box_eVi)
@@ -171,7 +166,7 @@ class expTab(QWidget):
             self.dcVoltage = self.dcVoltage + vstep
             itemp = kputils.V_to_index( float(self.dcVoltage ))
 
-            kputils.Inst_Query_Command_RS232(inst, "DAC.2"+ list_volts[itemp],verbose = False)
+            kputils.Inst_Query_Command_RS232(inst, "DAC.2"+ constants.LIST_VOLTS[itemp],verbose = False)
             self.dcV_label.setText( f"DC Voltage: {self.dcVoltage} V" )
             kputils.Connection_Close(inst,verbose = False)
 
@@ -188,7 +183,7 @@ class expTab(QWidget):
             self.dcVoltage = self.dcVoltage - vstep
             itemp = kputils.V_to_index( float(self.dcVoltage ))
 
-            kputils.Inst_Query_Command_RS232(inst, "DAC.2"+ list_volts[itemp],verbose = False)
+            kputils.Inst_Query_Command_RS232(inst, "DAC.2"+ constants.LIST_VOLTS[itemp],verbose = False)
             self.dcV_label.setText( f"DC Voltage: {self.dcVoltage} V" )
 
             kputils.Connection_Close(inst,verbose = False)  

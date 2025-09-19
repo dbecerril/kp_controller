@@ -4,19 +4,15 @@ Adjust values as needed for your hardware/workflow.
 """
 
 # ---- Lock-in mappings (examples: tune to your SR7265 maps) ----
-DICT_TC = {  # time constants shown in UI → instrument codes/seconds if needed
-    "10us": 10e-6, "30us": 30e-6, "100us": 100e-6, "300us": 300e-6,
-    "1ms": 1e-3, "3ms": 3e-3, "10ms": 10e-3, "30ms": 30e-3,
-    "100ms": 0.1, "300ms": 0.3, "1s": 1.0, "3s": 3.0, "10s": 10.0
-}
+DICT_TC = {"5ms":"8","10ms":"9","20ms":"10","50ms":"11","100ms":"12","500ms":"13","1s":"14"}
 DICT_SENS = {  # example current sensitivities; swap with your exact table
-    "1pA": 1e-12, "2pA": 2e-12, "5pA": 5e-12, "10pA": 1e-11,
-    "20pA": 2e-11, "50pA": 5e-11, "100pA": 1e-10, "200pA": 2e-10
+    "1pA": 15, "2pA": 16, "5pA": 17, "10pA": 18,
+    "20pA": 19, "50pA": 20, "100pA": 21, "200pA": 22
 }
 
 DICT_DEMOD_OPTIONS = {"X":"X.","Y":"Y.","Phase":"PHA.","R":"MAG."}
 
-DICT_TC_TO_SEC = {"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
+DICT_TC_TO_SEC = {"5ms":0.005,"10ms":0.01,"20ms":0.02,"50ms":.050,"100ms":.100,"500ms":.500,"1s":1}
 
 
 LIST_VOLTSP = [  "+"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(10) for h in range(10) for i in range(10) for j in range(10) for k in range(10)]

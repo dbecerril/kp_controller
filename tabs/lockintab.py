@@ -13,10 +13,7 @@ from PyQt5.QtWidgets import (
     QWidget,QComboBox,QHBoxLayout
 )
 
-dict_tc = {"20ms":"10","50ms":"11","100ms":"12","500ms":"13","1s":"14"}
-dict_demodv = {"X":"X.","Y":"Y.","Phase":"PHA.","R":"MAG."}
-dict_sens = {"1pA":"15","2pA":"16","5pA":"17","10pA":"18","20pA":"19","50pA":"20"}
-delaytimer  = 500
+import config.constants as constants
 
 class lockinTab(QWidget):
     
@@ -37,37 +34,37 @@ class lockinTab(QWidget):
         # Time constant box and label
         label_tc = QLabel("Time Constant: ")
         self.box_tc = QComboBox()
-        self.box_tc.addItems(list(dict_tc.keys()))
-        self.box_tc.setCurrentText("100ms")
+        self.box_tc.addItems(list(constants.DICT_TC.keys()))
+        self.box_tc.setCurrentText(str(self.expobj.timeconstant))
 
         # sensitivity constant box and label
         label_sens = QLabel("Sensitivity: ")
         self.box_sens = QComboBox()
-        self.box_sens.addItems(list(dict_sens.keys()))
-        self.box_sens.setCurrentText("2pA")
+        self.box_sens.addItems(list(constants.DICT_SENS.keys()))
+        self.box_sens.setCurrentText(str(self.expobj.sensitivity) )
 
         # Demod1 box and label
         label_demod1 = QLabel("Demod 1: ")
         self.box_demod1 = QComboBox()
-        self.box_demod1.addItems(list(dict_demodv.keys()))
+        self.box_demod1.addItems(list(constants.DICT_DEMOD_OPTIONS.keys()))
 
-        self.box_demod1.setCurrentText("X")
+        self.box_demod1.setCurrentText(str(self.expobj.demod1) )
 
         # Demod2 box and label
         label_demod2 = QLabel("Demod 2: ")
         self.box_demod2 = QComboBox()
-        self.box_demod2.addItems(list(dict_demodv.keys()))
-        self.box_demod2.setCurrentText("Phase")
+        self.box_demod2.addItems(list(constants.DICT_DEMOD_OPTIONS.keys()))
+        self.box_demod2.setCurrentText(str(self.expobj.demod2) )
 
         # Freq box and label
         label_freq = QLabel("Oscillator Frequency (Hz): ")
         self.box_freq = QLineEdit(self)
-        self.box_freq.setText("184.9")
+        self.box_freq.setText(str(self.expobj.freq))
         
         # Amplitude box and label
         label_ampl = QLabel("Oscillator Amplitude (V): ")
         self.box_ampl = QLineEdit(self)
-        self.box_ampl.setText("0.5")
+        self.box_ampl.setText(str(self.expobj.amp))
 
         self.button_setparams = QPushButton("Set Parameters")
 
