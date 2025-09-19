@@ -135,9 +135,6 @@ def Print_Status_Byte(nStatusByte):
 
 # x = "CBD00268" gets mag,phase,dac1
 # x = "CBD
-list_voltsp = [  "+"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(10) for h in range(10) for i in range(10) for j in range(10) for k in range(10)]
-list_voltsn = [  "-"+str(g) + str(h)+"."+str(i) + str(j) + str(k) for g in range(9,-1,-1) for h in range(9,-1,-1) for i in range(9,-1,-1) for j in range(9,-1,-1) for k in range(9,-1,-1)]
-list_volts = list_voltsn + list_voltsp
 
 def check_cmmd(tReturn):
     Print_Status_Byte(tReturn[1])
@@ -198,7 +195,7 @@ def checkLockinDataFormat(x):
 
 def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
         #set DAC value
-    cmmdi = "DAC.1" + list_volts[i]
+    cmmdi = "DAC.1" + constants.LIST_VOLTS[i]
     Inst_Query_Command_RS232(inst, cmmdi,verbose = False)
 
     if count_numpass == 0:
@@ -214,10 +211,10 @@ def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
     dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMOD_OPTIONS.get(expobj.demod1) ,verbose = False)
     dataPhi,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMOD_OPTIONS.get(expobj.demod2),verbose = False)
 
-    if i <int(len(list_volts)/2):
-        datai.append(-float( list_volts[i][1:] ))
+    if i <int(len(constants.LIST_VOLTS)/2):
+        datai.append(-float( constants.LIST_VOLTS[i][1:] ))
     else:
-        datai.append(float( list_volts[i][1:] ))
+        datai.append(float( constants.LIST_VOLTS[i][1:] ))
 
     datai.append(checkLockinDataFormat(dataMag) )
     datai.append(checkLockinDataFormat(dataPhi) )
@@ -236,16 +233,16 @@ def update_RP(expobj,rm):
 
 def mV_to_index(x_mV):
     idx_temp = int(x_mV)
-    return idx_temp + len(list_voltsn)
+    return idx_temp + len(constants.LIST_VOLTSN)
 def V_to_index(x_V):
     idx_temp = int( float(x_V)*1000 )
-    return idx_temp + len(list_voltsn)
-    
+    return idx_temp + len(constants.LIST_VOLTSN)
+
 def setLockinParams(expobj,rm):
 
     inst = Connection_Open_RS232(rm)
 
-    Inst_Query_Command_RS232(inst, "TC"+ str( constants.DICT_TC_TO_SEC.get( expobj.timeconstant )), verbose = False)
+    Inst_Query_Command_RS232(inst, "TC"+ str( constants.DICT_TC.get( expobj.timeconstant )), verbose = False)
     Inst_Query_Command_RS232(inst, "SEN"+str( constants.DICT_SENS.get(expobj.sensitivity ) ), verbose = False)
     Inst_Query_Command_RS232(inst, "OF."+str(expobj.freq), verbose = False)
     Inst_Query_Command_RS232(inst, "OA."+str(expobj.amp), verbose = False)

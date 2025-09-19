@@ -15,7 +15,10 @@ RS232_PORT_NAME = "ASRL7::INSTR"  # e.g. "ASRL5::INSTR"
 BAUD_RATE = 9600  # e.g. 9600
 
 ## INITIAL SETTINGS FOR THE EXPERIMENT OBJECT
-INITIAL_TIME_CONSTANT = "100ms" # e.g. "100ms"  
+INITIAL_TIME_CONSTANT = "20ms" # e.g. "100ms"
+
+
+
 INITIAL_SENSITIVITY = "20pA"    # e.g. "20pA"
 INITIAL_DEMOD1 = "X"            # e.g. "X"
 INITIAL_DEMOD2 = "Phase"        # e.g. "Phase"
