@@ -15,6 +15,7 @@ dict_sens = {"1pA":"15","2pA":"16","5pA":"17","10pA":"18","20pA":"19","50pA":"20
 import os
 import pyvisa
 
+from config.settings import RS232_PORT_NAME,BAUD_RATE
 # Try to read config; default to "auto" if missing
 try:
     from config.settings import VISA_LIBRARY
@@ -71,11 +72,11 @@ def get_rm():
 rm = get_rm()
 
 # opens a connection to the lock-in via RS232 of sPort, sBaudRate (strings)
-def Connection_Open_RS232(sPort, sBaudRate,rm,verbose = True):
+def Connection_Open_RS232(rm,verbose = True):
     if verbose:
         print('Open connection via RS232')
-    inst = rm.open_resource(sPort)
-    inst.baud_rate = int(sBaudRate)
+    inst = rm.open_resource(RS232_PORT_NAME)
+    inst.baud_rate = int(BAUD_RATE)
     inst.parity = Parity.even
     inst.data_bits = 7
     return inst
@@ -231,7 +232,7 @@ def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
 
 def update_RP(expobj,rm):
     
-    inst = Connection_Open_RS232(expobj.port, "9600",rm,verbose = False)
+    inst = Connection_Open_RS232(rm,verbose = False)
     dataMag,temp = Inst_Query_Command_RS232(inst, "MAG." ,verbose = False)
     dataPhi,temp = Inst_Query_Command_RS232(inst, "PHA.",verbose = False)
     Connection_Close(inst,verbose = False)        
@@ -247,7 +248,7 @@ def V_to_index(x_V):
     
 def setLockinParams(expobj,rm):
 
-    inst = Connection_Open_RS232(expobj.port, "9600",rm)
+    inst = Connection_Open_RS232(rm)
     
     Inst_Query_Command_RS232(inst, "TC"+dict_tc.get( expobj.timeconstant ), verbose = False)
     Inst_Query_Command_RS232(inst, "SEN"+dict_sens.get(expobj.sensitivity ), verbose = False)
@@ -304,7 +305,7 @@ def freqSweep(indxs,expobj,rm):
     time_cte = dict_tc.get( expobj.timeconstant )
     tc_sec     = dict_tc_to_sec.get(expobj.timeconstant)
     sens     = dict_sens.get(expobj.sensitivity )
-    inst = Connection_Open_RS232(expobj.port, "9600",rm)
+    inst = Connection_Open_RS232(rm)
     
     #print("Starting dac scan.. \n")
     #print("Centering phase, zeroing dac1...\n")

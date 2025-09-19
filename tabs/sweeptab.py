@@ -50,7 +50,7 @@ class sweepWorker(QObject) :
         time_cte = dict_tc.get( self.expobj.timeconstant )
         tc_sec   = dict_tc_to_sec.get(self.expobj.timeconstant)
         sens     = dict_sens.get(self.expobj.sensitivity )
-        inst = kputils.Connection_Open_RS232(self.expobj.port, "9600",self.rm)
+        inst = kputils.Connection_Open_RS232(self.rm)
         
         #print("Starting dac scan.. \n")
         #print("Centering phase, zeroing dac1...\n")

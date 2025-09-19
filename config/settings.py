@@ -11,3 +11,5 @@ Tip: You can also set the environment variable PYVISA_LIBRARY to override at run
 """
 
 VISA_LIBRARY = "C:/Windows/System32/visa64.dll"  # "auto" or r"C:/Windows/System32/visa64.dll", or "@py"
+RS232_PORT_NAME = "ASRL7::INSTR"  # e.g. "ASRL5::INSTR"
+BAUD_RATE = 9600  # e.g. 9600
