@@ -162,7 +162,7 @@ class expTab(QWidget):
         if self.button_dcVon.text() == "Unlock":
             vstep = 0.0
         else:
-            inst     = kputils.Connection_Open_RS232(self.expobj.port, "9600",self.rm,verbose = False)
+            inst     = kputils.Connection_Open_RS232(self.rm,verbose = False)
             try:
                 vstep = float(self.dcVstep.text())
             except:
@@ -179,7 +179,7 @@ class expTab(QWidget):
         if self.button_dcVon.text() == "Unlock":
             vstep = 0.0
         else:
-            inst     = kputils.Connection_Open_RS232(self.expobj.port, "9600",self.rm,verbose = False)
+            inst     = kputils.Connection_Open_RS232(self.rm,verbose = False)
             try:
                 vstep = float(self.dcVstep.text())
             except:
