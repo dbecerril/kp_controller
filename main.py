@@ -38,7 +38,9 @@ class Window(QWidget):
         self.timelist = []
         self.gradientlist = []
         self.setupUi()
-
+        self.bias_history = pd.DataFrame(columns=["time_min", "bias_V", "gradient"])
+        self.bias_csv_path = os.path.join("kpoutput", "time_bias_gradient.csv")
+        #self.bias_curve = None  # will become a PlotDataItem
 
     def setupUi(self):
         #mainWindow = QWidget()
@@ -91,10 +93,10 @@ class Window(QWidget):
         self.plot_graph2.setLabel("left", "Bias (V)")
         self.plot_graph2.setLabel("bottom", "Time (min)")
 
-
         plotbox.addWidget(self.plot_graph)
 
         plotbox.addWidget(self.plot_graph2)
+        self.bias_curve = self.plot_graph2.plot([], [], symbol="o", symbolSize=5, symbolBrush="b")
 
         topbox.addWidget(tabs,25)
         topbox.addLayout(plotbox,75) 
@@ -164,9 +166,18 @@ class Window(QWidget):
     def runScan(self):
         self.plot_graph.clear()
         self.plot_graph2.clear()
+        self.bias_history = pd.DataFrame(columns=["time_min", "bias_V", "gradient"])
+
+        self.bias_curve = self.plot_graph2.plot([], [], symbol="o", symbolSize=5, symbolBrush="b")
         self.timelist = []
         self.biaslist = []
         self.gradientlist = []
+        
+        self.bias_curve.setData([], [])
+        # reset csv path in case name changed mid-session
+        self.bias_csv_path = os.path.join("kpoutput", "time_bias_gradient.csv")
+
+
 
         self.expsettings.datatemp = pd.DataFrame([])
         self.timer.stop()
@@ -217,30 +228,45 @@ class Window(QWidget):
         )
 
 
+    def update_plot2(self, timestamp0=0):
+        # only act when a new point arrives
+        if not timestamp0:
+            return
 
+        # 1) compute bias & gradient from current data
+        bias_v, gradient = self.fitdata()
+        t_min = float(timestamp0) / 60.0
 
-    def update_plot2(self,timestamp0= 0 ):
-        path0 = ".\\kpoutput\\" + f"{self.expsettings.name}\\time_bias_gradient.csv"
-        biastemp = 0
-        gradienttemp = 0
-        if timestamp0 != 0:
-            biastemp,gradienttemp = self.fitdata() 
-            self.timelist.append(timestamp0/60)
-            self.biaslist.append(biastemp)
-            self.gradientlist.append(gradienttemp)
-        if len(self.biaslist) > 0:
-            self.plot_graph2.setTitle(f"Bias Avg:{np.round( np.array(self.biaslist).mean(),3)} V, Std: {np.round( np.array(self.biaslist).std(),3) } V, \n Gradient Avg:{np.round( np.array(self.gradientlist).mean(),2)}  ,Std: {np.round( np.array(self.gradientlist).std(),2)}  ")             
-            f = open(path0, 'a')
-            f.write(f'{timestamp0/60},{biastemp},{gradienttemp} \n')
-            f.close()
-            
-        self.line = self.plot_graph2.plot(
-            self.timelist,
-            self.biaslist,
-            symbol="o",
-            symbolSize=5,
-            symbolBrush="b",
-        )      
+        # 2) append to in-memory lists
+        self.timelist.append(t_min)
+        self.biaslist.append(float(bias_v))
+        self.gradientlist.append(float(gradient))
+
+        # 3) append one row to CSV (header once)
+        try:
+            folder = os.path.dirname(self.bias_csv_path)
+            os.makedirs(folder, exist_ok=True)
+            write_header = not os.path.exists(self.bias_csv_path) or os.path.getsize(self.bias_csv_path) == 0
+            with open(self.bias_csv_path, "a", encoding="utf-8") as f:
+                if write_header:
+                    f.write("time_min,bias_V,gradient\n")
+                f.write(f"{t_min},{bias_v},{gradient}\n")
+        except Exception:
+            pass  # ignore file errors during plotting
+
+        # 4) update the plot using the single persistent curve
+        if self.bias_curve is None:
+            self.bias_curve = self.plot_graph2.plot([], [], symbol="o", symbolSize=5, symbolBrush="b")
+        self.bias_curve.setData(self.timelist, self.biaslist)
+
+        # 5) update the title with mean/std
+        b = np.array(self.biaslist, dtype=float)
+        g = np.array(self.gradientlist, dtype=float)
+        self.plot_graph2.setTitle(
+            f"Bias Avg:{np.round(b.mean(),3)} V, Std:{np.round(b.std(),3)} V,\n"
+            f"Gradient Avg:{np.round(g.mean(),2)}, Std:{np.round(g.std(),2)}"
+        )
+
         #return mainWindow
     def updateCurrentPlot(self,data):
         datatemp = np.array(data).reshape(-1,3)
