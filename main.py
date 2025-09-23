@@ -22,8 +22,9 @@ from PyQt5 import QtGui
 from tabs import sweeptab,exptab,lockintab
 from config import constants
 DICT_TC_TO_SEC = constants.DICT_TC_TO_SEC
+import tabs
 from threads.scan_worker import Worker
-
+from tabs import dynamicstab
 # Step 1: Create a worker class
 # We work with the average curve and single curve
     
@@ -77,10 +78,15 @@ class Window(QWidget):
         self.lockinTabUI = lockintab.lockinTab(self.expsettings,self.rm)
         self.lockinTabUI.button_setparams.clicked.connect(self.set_params)
         
+        # Dynamics Tab
+        self.dynamicsTabUI = dynamicstab.dynamicsTab(self.expsettings, self.rm)
+        self.dynamicsTabUI.dataReady.connect(self.updateDynamicsPlot)
+
         tabs.addTab(self.experimentTabUI, "Experiment")
         tabs.addTab(self.lockinTabUI, "Lock-in Settings")
         tabs.addTab(self.sweepTabUI, "Sweeps")
-        
+        tabs.addTab(self.dynamicsTabUI, "Dynamics")
+       
         plotbox = QVBoxLayout()
         self.plot_graph = pg.PlotWidget()
         self.plot_graph.setTitle("Current Scan")
@@ -227,9 +233,16 @@ class Window(QWidget):
             lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
 
+    def updateDynamicsPlot(self, t, y, ylabel):
+        """Plot dynamics data on the main right-side plot."""
+        self.plot_graph.clear()
+        self.plot_graph.setLabel("bottom", "Time (s)")
+        self.plot_graph.setLabel("left", ylabel)
+        # draw as markers to mirror your style; change as you prefer
+        self.plot_graph.plot(t, y, symbol='o', symbolSize=4, symbolBrush=0.01, name='Dynamics')
 
     def update_plot2(self, timestamp0=0):
-        # only act when a new point arrives
+        # only act when a new point arrives7
         if not timestamp0:
             return
 
