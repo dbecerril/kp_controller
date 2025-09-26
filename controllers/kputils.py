@@ -259,7 +259,7 @@ def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
 
     return datai
 
-def update_RP(expobj,rm):
+def update_RP(rm):
     
     inst = Connection_Open_RS232(rm,verbose = False)
     dataMag,temp = Inst_Query_Command_RS232(inst, "MAG." ,verbose = False)

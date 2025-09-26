@@ -17,6 +17,9 @@ from PyQt5.QtWidgets import (
     QWidget,QComboBox,QHBoxLayout
 )
 
+from PyQt5.QtWidgets import QTableView, QHeaderView
+from PyQt5.QtCore import QAbstractTableModel, Qt, QVariant
+
 from PyQt5.QtCore import QTimer,QThread,pyqtSignal,QObject
 from PyQt5 import QtGui
 from tabs import sweeptab,exptab,lockintab
@@ -27,7 +30,36 @@ from threads.scan_worker import Worker
 from tabs import dynamicstab
 # Step 1: Create a worker class
 # We work with the average curve and single curve
-    
+class PandasModel(QAbstractTableModel):
+    def __init__(self, df=pd.DataFrame(), parent=None):
+        super().__init__(parent)
+        self._df = df
+
+    def rowCount(self, parent=None):
+        return 0 if self._df is None else len(self._df)
+
+    def columnCount(self, parent=None):
+        return 0 if self._df is None else len(self._df.columns)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid() or role != Qt.DisplayRole or self._df is None:
+            return QVariant()
+        value = self._df.iat[index.row(), index.column()]
+        return "" if pd.isna(value) else str(value)
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if role != Qt.DisplayRole or self._df is None:
+            return QVariant()
+        if orientation == Qt.Horizontal:
+            return str(self._df.columns[section])
+        return str
+        (section + 1)
+
+    def update(self, df):
+        self.beginResetModel()
+        self._df = df
+        self.endResetModel()
+  
 class Window(QWidget):
     signalWorker     = pyqtSignal()
 
@@ -156,7 +188,7 @@ class Window(QWidget):
    
 
     def updateMeasure(self):
-        dataR,dataPhi= kputils.update_RP(self.expsettings, self.rm)
+        dataR,dataPhi= kputils.update_RP( self.rm)
         try:
             dataR = str( np.round( float(dataR)*1E12,3)  )
         except:

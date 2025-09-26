@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QWidget,QComboBox,QHBoxLayout
 )
 import config.constants as constants
+from PyQt5.QtWidgets import QPushButton, QLineEdit, QLabel, QHBoxLayout
 
 
 
@@ -34,9 +35,14 @@ class expTab(QWidget):
         fbox =QFormLayout()
         self.setLayout(fbox)
 
-        label_expname2    = QLabel("File Name")
-        self.box_expname = QLineEdit()
-        self.box_expname.setText(" ")
+        #label_expname2    = QLabel("File Name")
+        #self.box_expname = QLineEdit()
+        #self.box_expname.setText(" ")
+        # --- NEW: Sample name field ---
+        label_samplename = QLabel("Sample Name")
+        self.box_samplename = QLineEdit()
+        self.box_samplename.setPlaceholderText("e.g., Au(111) / wafer A / etc.")
+
         # Scan Parmaeters
         groupBox = QGroupBox("Scan Options")
         label_scanparam = QLabel("Scan Parameters: ")
@@ -109,8 +115,23 @@ class expTab(QWidget):
         self.button_start = QPushButton("Start")
         label_savedata = QLabel("Save Data: ")
         self.button_stop = QPushButton("Stop")
-        self.CkBox_savedata = QCheckBox()
-        self.CkBox_savedata.setChecked(True)
+        #self.CkBox_savedata = QCheckBox()
+        #self.CkBox_savedata.setChecked(True)
+# --- NEW: Save Scan button and button row ---
+        self.button_save = QPushButton("Save Scan")
+
+        # --- NEW: Save Scan button and button row ---
+        self.button_save = QPushButton("Save Scan")
+
+        hbox_buttons = QHBoxLayout()
+        hbox_buttons.addWidget(self.button_start)
+        hbox_buttons.addWidget(self.button_stop)
+        hbox_buttons.addWidget(self.button_save)
+
+        hbox_buttons = QHBoxLayout()
+        hbox_buttons.addWidget(self.button_start)
+        hbox_buttons.addWidget(self.button_stop)
+        hbox_buttons.addWidget(self.button_save)
 
 
         # Fit parameters
@@ -119,21 +140,26 @@ class expTab(QWidget):
         #hbox3.addWidget(self.box_fitmodel )
 
 
-        self.box_expname.textChanged.connect(self.setParameters_exptab)
+        #self.box_expname.textChanged.connect(self.setParameters_exptab)
         self.box_eVstep.textChanged.connect(self.setParameters_exptab)
         self.box_eVf.textChanged.connect(self.setParameters_exptab)
         self.box_eVi.textChanged.connect(self.setParameters_exptab)  
 
 
         # Add all widgets to the fbox 
-        fbox.addRow(label_expname2)
-        fbox.addRow(self.box_expname)
+        #fbox.addRow(label_expname2)
+        #fbox.addRow(self.box_expname)
+        # --- NEW rows for Sample name ---
+        fbox.addRow(label_samplename)
+        fbox.addRow(self.box_samplename)
 
         fbox.addRow(groupBox)
-        fbox.addRow(self.button_start)
-        fbox.addRow(self.button_stop)
 
-        fbox.addRow(label_savedata,self.CkBox_savedata)
+        # --- Buttons on one line: Start | Stop | Save Scan ---
+        fbox.addRow(hbox_buttons)
+
+        #fbox.addRow(label_savedata, self.CkBox_savedata)
+
         fbox.addRow(self.dcV_label)
         fbox.addRow(hbox_heightctrl)
     
@@ -145,7 +171,7 @@ class expTab(QWidget):
         dtemp = [self.box_eVi.text(),self.box_eVf.text(), self.box_eVstep.text()]
 
         self.expobj.setScanParam(dtemp)
-        self.expobj.setName(self.box_expname.text())
+        #self.expobj.setName(self.box_expname.text())
 
     def dcVswitch(self):
         if self.button_dcVon.text() == "Lock":

@@ -10,7 +10,7 @@ class experiment:
         self.demod2       = settings.INITIAL_DEMOD2
         self.freq         = settings.INITIAL_FREQ_HZ
         self.amp          = settings.INITIAL_AMP_V
-        self.name         = " "
+        #self.name         = "default"
         self.port         = settings.RS232_PORT_NAME
         self.scanparams   = settings.INITIAL_SCAN_PARAMS
         self.numpass      = 1
