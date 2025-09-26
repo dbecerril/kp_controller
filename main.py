@@ -79,13 +79,13 @@ class Window(QWidget):
         self.lockinTabUI.button_setparams.clicked.connect(self.set_params)
         
         # Dynamics Tab
-        self.dynamicsTabUI = dynamicstab.dynamicsTab(self.expsettings, self.rm)
-        self.dynamicsTabUI.dataReady.connect(self.updateDynamicsPlot)
+        #self.dynamicsTabUI = dynamicstab.dynamicsTab(self.expsettings, self.rm)
+        #self.dynamicsTabUI.dataReady.connect(self.on_dynamics_data_ready)
 
         tabs.addTab(self.experimentTabUI, "Experiment")
         tabs.addTab(self.lockinTabUI, "Lock-in Settings")
         tabs.addTab(self.sweepTabUI, "Sweeps")
-        tabs.addTab(self.dynamicsTabUI, "Dynamics")
+        #tabs.addTab(self.dynamicsTabUI, "Dynamics")
        
         plotbox = QVBoxLayout()
         self.plot_graph = pg.PlotWidget()
@@ -232,6 +232,9 @@ class Window(QWidget):
         self.thread.finished.connect(
             lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
+    def on_dynamics_data_ready(self, t, y, label):
+    # Plot on the right-side plot
+        self.updateDynamicsPlot(t, y, ylabel=label)
 
     def updateDynamicsPlot(self, t, y, ylabel):
         """Plot dynamics data on the main right-side plot."""

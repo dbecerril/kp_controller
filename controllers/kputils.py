@@ -7,6 +7,7 @@ import lmfit
 #from tqdm.notebook import tqdm
 import pandas as pd
 import config.constants as constants
+import config.settings as settings
 # controllers/kputils.py
 import os
 import pyvisa
@@ -17,6 +18,18 @@ try:
     from config.settings import VISA_LIBRARY
 except Exception:
     VISA_LIBRARY = "auto"
+
+
+# --- add/adjust imports near the top of kputils.py ---
+import re
+import threading
+from pyvisa.constants import  StopBits
+from pyvisa import errors as visa_errors
+from pyvisa.constants import VI_ERROR_TMO
+
+# Module-level lock to serialize RS232 access (re-entrant for nested calls)
+_RS232_LOCK = threading.RLock()
+
 
 _rm = None  # private singleton
 
@@ -67,56 +80,79 @@ def get_rm():
 # Backward compatibility: keep a module-level 'rm' like before
 
 # opens a connection to the lock-in via RS232 of sPort, sBaudRate (strings)
-def Connection_Open_RS232(rm,verbose = True):
+# --- replace Connection_Open_RS232 with this version ---
+def Connection_Open_RS232(rm, verbose=True):
     if verbose:
         print('Open connection via RS232')
-    inst = rm.open_resource(RS232_PORT_NAME)
-    inst.baud_rate = int(BAUD_RATE)
-    inst.parity = Parity.even
-    inst.data_bits = 7
-    return inst
+    with _RS232_LOCK:
+        inst = rm.open_resource(RS232_PORT_NAME)
+        inst.baud_rate = int(BAUD_RATE)
+        inst.parity = Parity.even
+        inst.data_bits = 7
+        inst.stop_bits = StopBits.one           # explicit
+        inst.write_termination = None           # we send our own CR
+        inst.read_termination = None            # raw reads
+        inst.timeout = 5000                     # ms per VISA call
+        return inst
+
    
-# sends a write command string sCmd via RS232 to the lock-in already opened as inst
-# and returns the resulting response string and status byte
-def Inst_Query_Command_RS232(inst, sCmd, verbose = True):
+def Inst_Query_Command_RS232(inst, sCmd, verbose=True):
+    """
+    Send command with a small inter-character delay; read until '*' or '?'.
+    Returns (sResponse:str, nStatusByte:int). sResponse has CR/LF removed and echo stripped.
+    """
     if verbose:
         print('Send query command: ' + sCmd)
-    # serial port commands need sending one character at a time and checking for 
-    # handshake
-    for i in range(len(sCmd)):
-        inst.write_raw(sCmd[i])
-        sEcho = inst.read_bytes(1).decode('utf8')
-    # write the terminator
-    inst.write_raw('\r')
-    sResponse = ''
-    # read until recieve a prompt of ? or *
-    sEcho = inst.read_bytes(1).decode('utf8')
-    while (sEcho != '?') and (sEcho != '*'):
-        sResponse = sResponse + sEcho
-        sEcho = inst.read_bytes(1).decode('utf8')
-    sResponse = sResponse.replace('\n',' ')
-    sResponse = sResponse.replace('\r',' ')
-    # set returned status byte to Comamnd Done
-    nStatusByte = 1
-    if (sEcho == '*'):
-       nStatusByte = 1
-    if ((sEcho == '?') & (sCmd != 'ST')):
-        # send the status command to get instrument status except if this is being
-        # called by a ST command itself
-        sStatus = Inst_Query_Command_RS232(inst, 'ST')
-        nStatusByte = int(sStatus[0])
-    # mask out bits 4, 5 & 6 which are not consistent across all instruments
-    nStatusByte = nStatusByte & 143
-    # return the response from the instrument and the status byte
-    return sResponse, nStatusByte  
+
+    with _RS232_LOCK:
+        # Send + read reply for the primary command
+        sResponse, prompt = _send_cmd_charspaced(inst, sCmd)
+
+        # Normalize whitespace like your old code
+        sResponse = sResponse.replace('\n', ' ').replace('\r', ' ')
+
+        # Compute status byte (avoid recursive ST)
+        if prompt == b'*':
+            nStatusByte = 1
+        elif prompt == b'?':
+            # Try to fetch numeric status (first integer found in 'ST' reply).
+            nStatusByte = 0
+            if sCmd != 'ST':
+                st_text, st_prompt = _send_cmd_charspaced(inst, 'ST')
+                # strip echo 'ST' and search for first integer
+                if st_text.upper().startswith('ST'):
+                    st_text = st_text[2:].lstrip()
+                m = re.search(r'(-?\d+)', st_text)
+                if m:
+                    try:
+                        nStatusByte = int(m.group(1))
+                    except Exception:
+                        nStatusByte = 0
+        else:
+            # No prompt seen: treat as unknown but non-fatal
+            nStatusByte = 0
+
+        # Mask bits like before (143 decimal = 0b10001111)
+        nStatusByte = nStatusByte & 143
+        return sResponse, nStatusByte
 
 # closes the open resource (use for USB, GPIB, RS232, and Ethernet)
-def Connection_Close(inst,verbose = True):
+# --- replace Connection_Close with a resilient version ---
+def Connection_Close(inst, verbose=True):
     if verbose:
         print('Close connection')
-    inst.before_close()
-    return_status = inst.close()
-    return return_status
+    with _RS232_LOCK:
+        try:
+            inst.before_close()
+        except visa_errors.InvalidSession:
+            # Already closed; ignore
+            return None
+        except Exception:
+            pass
+        try:
+            return inst.close()
+        except visa_errors.InvalidSession:
+            return None
 
 
 def Print_Status_Byte(nStatusByte):
@@ -205,8 +241,9 @@ def dacScanStep(i,expobj,inst,tcRatio,count_numpass):
         time.sleep(1)
 
     else:
+        #I comment this because the new inst_query already has a delay
         time.sleep(tcRatio*constants.DICT_TC_TO_SEC.get(expobj.timeconstant)) 
-
+    
     datai = []
     dataMag,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMOD_OPTIONS.get(expobj.demod1) ,verbose = False)
     dataPhi,temp = Inst_Query_Command_RS232(inst, constants.DICT_DEMOD_OPTIONS.get(expobj.demod2),verbose = False)
@@ -332,3 +369,51 @@ def freqSweep(indxs,expobj,rm):
     Connection_Close(inst)
     print(data)
     return pd.DataFrame(data,columns = ["Freq. (Hz) ",expobj.demod1] )
+
+
+# --- helper: send with small inter-char delay, then read-until-prompt ---
+_INTER_CHAR_DELAY = settings.INTER_CHAR_DELAY       # 20 ms worked in your Jupyter test
+_OVERALL_RD_TIMEOUT_S = settings.OVERALL_RD_TIMEOUT_S     # overall time to wait for * or ?
+
+def _send_cmd_charspaced(inst, sCmd: str,
+                         inter_char_delay=_INTER_CHAR_DELAY,
+                         overall_timeout_s=_OVERALL_RD_TIMEOUT_S):
+    """Write sCmd char-by-char (no echo reads), CR at end; read bytes until '*' or '?'."""
+    # Write
+    for ch in sCmd:
+        inst.write_raw(ch.encode('ascii'))
+        #time.sleep(inter_char_delay)
+        sEcho = inst.read_bytes(1).decode('utf8')
+
+    inst.write_raw(b'\r')
+
+    # Read until prompt
+    buf = bytearray()
+    prompt = None
+    old_timeout = inst.timeout
+    inst.timeout = 100  # short per-read; we enforce overall deadline ourselves
+    deadline = time.time() + overall_timeout_s
+    try:
+        while time.time() < deadline:
+            try:
+                b = inst.read_bytes(1)
+            except visa_errors.VisaIOError as e:
+                if getattr(e, "error_code", None) == VI_ERROR_TMO:
+                    continue
+                raise
+            if not b:
+                continue
+            if b in (b'*', b'?'):
+                prompt = b
+                break
+            if b not in (b'\r', b'\n'):
+                buf.extend(b)
+    finally:
+        inst.timeout = old_timeout
+
+    # Decode, strip echoed command (device echoes 'CMD' before data)
+    text = buf.decode('utf-8', errors='ignore')
+    if text.upper().startswith(sCmd.upper()):
+        text = text[len(sCmd):].lstrip()
+
+    return text, prompt
