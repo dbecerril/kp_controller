@@ -8,6 +8,7 @@ import numpy as np
 import threading
 import queue,os
 import pandas as pd
+import json  # make sure this is at the top of your file
 
 from PyQt5.QtWidgets import (
     QApplication,QPushButton,
@@ -27,39 +28,10 @@ from config import constants
 DICT_TC_TO_SEC = constants.DICT_TC_TO_SEC
 import tabs
 from threads.scan_worker import Worker
-from tabs import dynamicstab
+from tabs import session
 # Step 1: Create a worker class
 # We work with the average curve and single curve
-class PandasModel(QAbstractTableModel):
-    def __init__(self, df=pd.DataFrame(), parent=None):
-        super().__init__(parent)
-        self._df = df
 
-    def rowCount(self, parent=None):
-        return 0 if self._df is None else len(self._df)
-
-    def columnCount(self, parent=None):
-        return 0 if self._df is None else len(self._df.columns)
-
-    def data(self, index, role=Qt.DisplayRole):
-        if not index.isValid() or role != Qt.DisplayRole or self._df is None:
-            return QVariant()
-        value = self._df.iat[index.row(), index.column()]
-        return "" if pd.isna(value) else str(value)
-
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if role != Qt.DisplayRole or self._df is None:
-            return QVariant()
-        if orientation == Qt.Horizontal:
-            return str(self._df.columns[section])
-        return str
-        (section + 1)
-
-    def update(self, df):
-        self.beginResetModel()
-        self._df = df
-        self.endResetModel()
-  
 class Window(QWidget):
     signalWorker     = pyqtSignal()
 
@@ -74,6 +46,16 @@ class Window(QWidget):
         self.bias_history = pd.DataFrame(columns=["time_min", "bias_V", "gradient"])
         self.bias_csv_path = os.path.join("kpoutput", "time_bias_gradient.csv")
         #self.bias_curve = None  # will become a PlotDataItem
+        # --- Session storage for saved scans (table + JSONL log) ---
+        self.session_records = []  # list of dicts (one per saved scan)
+        self.session_df = pd.DataFrame(columns=[
+            "timestamp_iso", "sample_name", "bias_V", "bias_V_std", "gradient", "gradient_std", "num_scans",
+            "lockin_params_json", "scan_params_json", "session_name"  # <-- added
+        ])
+
+        ts_str = time.strftime("%Y%m%d_%H%M%S")
+        os.makedirs("kpoutput", exist_ok=True)
+        self.session_jsonl_path = os.path.join("kpoutput", f"session_{ts_str}.jsonl")
 
     def setupUi(self):
         #mainWindow = QWidget()
@@ -113,12 +95,20 @@ class Window(QWidget):
         # Dynamics Tab
         #self.dynamicsTabUI = dynamicstab.dynamicsTab(self.expsettings, self.rm)
         #self.dynamicsTabUI.dataReady.connect(self.on_dynamics_data_ready)
+        # --- Session tab (new) ---
+        self.sessionTabUI = session.SessionTab()
+        # SessionTab now does its own file dialogs for Import/Export.
+        # Keep "Clear Session" handled in main:
+        self.sessionTabUI.clearRequested.connect(self.clear_session)
+        # When the user imports a CSV from the tab, update main's in-memory DF:
+        self.sessionTabUI.dataImported.connect(self._on_session_data_imported)
 
         tabs.addTab(self.experimentTabUI, "Experiment")
         tabs.addTab(self.lockinTabUI, "Lock-in Settings")
         tabs.addTab(self.sweepTabUI, "Sweeps")
         #tabs.addTab(self.dynamicsTabUI, "Dynamics")
-       
+        tabs.addTab(self.sessionTabUI, "Session")
+   
         plotbox = QVBoxLayout()
         self.plot_graph = pg.PlotWidget()
         self.plot_graph.setTitle("Current Scan")
@@ -157,10 +147,184 @@ class Window(QWidget):
         
         self.label_status = QLabel("Status:")
         self.botbox.addWidget(self.label_status,82 )
-        
+
+        self.experimentTabUI.button_save.clicked.connect(self.save_current_scan)
+
         layout.addLayout(topbox)        
         layout.addLayout(self.botbox)
-        
+
+    def _on_session_data_imported(self, df: pd.DataFrame):
+        """Receive imported data from SessionTab and adopt it as the current session."""
+        self.session_df = df.copy()
+        self.refresh_session_table()
+        self.label_status.setText("Status: Session table loaded from CSV.")
+            
+    def refresh_session_table(self):
+        # Push current DF to the Session tab
+        self.sessionTabUI.update_dataframe(self.session_df)
+
+    def clear_session(self):
+        self.session_records = []
+        # keep columns, empty rows
+        self.session_df = self.session_df.iloc[0:0]
+        # rotate JSONL so new saves start a fresh file
+        ts_str = time.strftime("%Y%m%d_%H%M%S")
+        self.session_jsonl_path = os.path.join("kpoutput", f"session_{ts_str}.jsonl")
+        self.refresh_session_table()
+        self.label_status.setText("Status: Session cleared.")
+
+    def _safe_getattr(self, obj, name, default=None):
+        try:
+            return getattr(obj, name)
+        except Exception:
+            return default
+
+    def _collect_lockin_params(self):
+        params = {}
+        for k in [
+            "tc", "sens", "harm", "freq_hz", "ampl_v", "reserve", "phase_deg",
+            "filter_slope", "input_config", "time_constant", "sensitivity"
+        ]:
+            v = self._safe_getattr(self.expsettings, k, None)
+            if v is not None:
+                params[k] = v
+
+        ui_map = {
+            "box_tc": "tc",
+            "box_sens": "sens",
+            "box_harm": "harm",
+            "box_freq": "freq_hz",
+            "box_ampl": "ampl_v",
+            "box_reserve": "reserve",
+            "box_phase": "phase_deg",
+        }
+        for widget_name, key in ui_map.items():
+            w = self._safe_getattr(self.lockinTabUI, widget_name, None)
+            if w is not None:
+                try:
+                    if hasattr(w, "currentText"):
+                        params[key] = w.currentText()
+                    elif hasattr(w, "text"):
+                        params[key] = w.text()
+                except Exception:
+                    pass
+        return params
+
+    def _collect_scan_params(self):
+        params = {}
+        ui_map = {
+            "box_eVi": "eV_start",
+            "box_eVf": "eV_stop",
+            "box_eVstep": "eV_step",     # matches your expTab
+            "box_noscans": "num_scans",
+            "box_delay": "delay_between_scans_s",
+            #"CkBox_savedata": "savedata",
+        }
+        for widget_name, key in ui_map.items():
+            w = self._safe_getattr(self.experimentTabUI, widget_name, None)
+            if w is None:
+                continue
+            try:
+                if hasattr(w, "isChecked"):
+                    params[key] = bool(w.isChecked())
+                elif hasattr(w, "currentText"):
+                    params[key] = w.currentText()
+                elif hasattr(w, "text"):
+                    params[key] = w.text()
+            except Exception:
+                pass
+        params["demod1_label"] = self._safe_getattr(self.expsettings, "demod1", None)
+        params["demod2_label"] = self._safe_getattr(self.expsettings, "demod2", None)
+        return params
+
+    def save_current_scan(self):
+        bias_v,bias_std, gradient, gradient_std, num_scans = self.fitdata_to_session()
+        print("fitdata_to_session:", bias_v, bias_std, gradient, gradient_std, num_scans)
+        # Require data
+        if self.expsettings.data_multscan is None:
+            self.label_status.setText("Status: No data to save (run a scan first).")
+            return
+
+        # Compute bias & gradient
+        try:
+            bias_v,bias_std, gradient, gradient_std, num_scans = self.fitdata_to_session()
+            print("fitdata_to_session:", bias_v, bias_std, gradient, gradient_std, num_scans)
+            bias_v = float(bias_v) if bias_v is not None else None
+            gradient = float(gradient) if gradient is not None else None
+            bias_std = float(bias_std) if bias_std is not None else None
+            gradient_std = float(gradient_std) if gradient_std is not None else None
+
+        except Exception:
+            bias_v, bias_std, gradient, gradient_std,num_scans = None, None, None, None, None
+
+        # Metadata
+        timestamp_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
+        try:
+            sample_name = self.experimentTabUI.box_samplename.text().strip()
+        except Exception:
+            sample_name = ""
+
+        lockin_params = self._collect_lockin_params()
+        scan_params   = self._collect_scan_params()
+
+        record = {
+            "timestamp_iso": timestamp_iso,
+            "sample_name": sample_name,
+            "bias_V": np.round(bias_v,3) if bias_v is not None else None,
+            "bias_V_std": np.round(bias_std,3) if bias_std is not None else None,
+            "gradient": np.round(gradient,3) if gradient is not None else None,
+            "gradient_std": np.round(gradient_std,3) if gradient_std is not None else None,
+            "num_scans": num_scans,
+            "lockin_params": lockin_params,
+            "scan_params": scan_params,
+        }
+
+        # In-memory
+        self.session_records.append(record)
+        # Pull current session name from the Session tab
+        try:
+            session_name = self.sessionTabUI.get_session_name().strip()
+        except Exception:
+            session_name = ""
+        # --- build the row dict (unchanged) ---
+        row = {
+            "timestamp_iso": timestamp_iso,
+            "sample_name": sample_name,
+            "bias_V": float(bias_v) if bias_v is not None else np.nan,
+            "bias_V_std": float(bias_std) if bias_std is not None else np.nan,
+            "gradient": float(gradient) if gradient is not None else np.nan,
+            "gradient_std": float(gradient_std) if gradient_std is not None else np.nan,
+            "num_scans": num_scans,
+            "lockin_params_json": json.dumps(lockin_params),
+            "scan_params_json": json.dumps(scan_params),
+            "session_name": self.sessionTabUI.get_session_name().strip() if hasattr(self.sessionTabUI, "get_session_name") else "",
+        }
+
+        # --- make a 1-row DataFrame with the SAME columns as self.session_df ---
+        new_row = pd.DataFrame([row], columns=self.session_df.columns)
+
+        # --- drop all-NA columns from the row to avoid the deprecation path ---
+        new_row = new_row.dropna(axis=1, how='all')
+
+        # --- concat only non-empty frames (kills the warning path) ---
+        frames = []
+        if not self.session_df.empty:
+            frames.append(self.session_df)
+        if not new_row.empty:
+            frames.append(new_row)
+
+        if frames:
+            self.session_df = pd.concat(frames, ignore_index=True, copy=False)
+        else:
+            # If both were empty (unlikely), initialize with expected columns
+            self.session_df = pd.DataFrame(columns=[
+                "timestamp_iso","sample_name","bias_V","gradient",
+                "lockin_params_json","scan_params_json","session_name"
+            ])
+
+        # push to the Session tab
+        self.refresh_session_table()
+
 
 ######################################
 ### Logic Functions  start here
@@ -228,13 +392,13 @@ class Window(QWidget):
 
         time_between_scans = self.experimentTabUI.box_delay.text() 
         avgmultiscans = False
-        savedata = self.experimentTabUI.CkBox_savedata.isChecked()
+        #savedata = self.experimentTabUI.CkBox_savedata.isChecked()
 
         #tc_pointdelay = float( self.experimentTabUI.box_pointdelay.text() )
         self.thread = QThread()
 
         # Step 3: Create a worker object
-        self.worker = Worker(self.expsettings,self.rm,[multiscan,avgmultiscans,numscans,savedata,time_between_scans])
+        self.worker = Worker(self.expsettings,self.rm,[multiscan,avgmultiscans,numscans,time_between_scans])
         self.signalWorker.connect(self.worker.listen)
         # Step 4: Move worker to the thread
         self.worker.moveToThread(self.thread)
@@ -344,10 +508,10 @@ class Window(QWidget):
         
 
     def updateExpObjData(self,data):
-        datatemp = np.array(data).reshape(-1,3)
-        datatemp = pd.DataFrame(datatemp,columns = ["DAC1 (V)",self.expsettings.demod1,self.expsettings.demod2] )
-        self.expsettings.datatemp = datatemp
-        
+
+        self.expsettings.data_multscan = data
+        self.expsettings.datatemp = pd.DataFrame(data[-1],columns = ["DAC1 (V)",self.expsettings.demod1,self.expsettings.demod2] )
+
     def mV_to_index(self,x_mV):
         idx_temp = int(x_mV)
         
@@ -356,26 +520,30 @@ class Window(QWidget):
 
     def fitdata(self):
         
-        fit_model = "linear"
+        # fit_model = "linear"
         myFont=QtGui.QFont()
         myFont.setBold(True)
 
         x,y0,y,res,gradient= kputils.fitLinear(self.expsettings, 
                                         float( self.experimentTabUI.box_eVi.text() ), 
                                         float( self.experimentTabUI.box_eVf.text() ))
-        #self.experimentTabUI.label_fittedGradient.setText(f"gradient: {np.round(gradient,3)} ")
 
         self.plot_graph.clear()
         self.plot_graph.plot(self.expsettings.datatemp["DAC1 (V)"], 
                              self.expsettings.datatemp[self.expsettings.demod1].values*1e12)        
-        #self.plot_graph.plot(x, y0,pen ='g')
         
         self.plot_graph.plot(x, y,pen ='r')
-        #self.experimentTabUI.label_fitvalue.setText(f"bias: {np.round(res,3)} V")
-        #self.experimentTabUI.label_fitvalue.setFont(myFont)
+
 
         return res,gradient
+    
+    def fitdata_to_session(self):
+        avg_grad, avg_xint, std_grad, std_xint = kputils.fitLinear_batch_np(self.expsettings.data_multscan,
+                                                                            float( self.experimentTabUI.box_eVi.text() ), 
+                                                                            float( self.experimentTabUI.box_eVf.text() ))
 
+        return  avg_xint,std_xint, avg_grad, std_grad, len(self.expsettings.data_multscan)
+    
     def hz_to_indx(self,x_hz):
         xtemp = int(x_hz*1e3)
         return str(xtemp)
@@ -384,8 +552,6 @@ class Window(QWidget):
         self.plot_graph.clear()
         self.expsettings.datatemp = pd.DataFrame([])
         self.timer.stop()
-
-
 
         #tc_pointdelay = float( self.experimentTabUI.box_pointdelay.text() )
         self.thread = QThread()

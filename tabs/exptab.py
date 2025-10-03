@@ -113,13 +113,9 @@ class expTab(QWidget):
         #Start and save buttons
         
         self.button_start = QPushButton("Start")
-        label_savedata = QLabel("Save Data: ")
         self.button_stop = QPushButton("Stop")
         #self.CkBox_savedata = QCheckBox()
         #self.CkBox_savedata.setChecked(True)
-# --- NEW: Save Scan button and button row ---
-        self.button_save = QPushButton("Save Scan")
-
         # --- NEW: Save Scan button and button row ---
         self.button_save = QPushButton("Save Scan")
 

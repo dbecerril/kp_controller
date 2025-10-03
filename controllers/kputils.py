@@ -286,25 +286,6 @@ def setLockinParams(expobj,rm):
 
     Connection_Close(inst)        
 
-def fitParabola(expobj,vi,vf):
-    
-    def parabola(x, A,B,C):
-        return A*(x-B)**2 + C
-
-    df = expobj.datatemp
-    colnames = df.columns
-    vi_indx = df[colnames[0]].iloc[(df[colnames[0]]-vi).abs().argsort()[:1] ].index[0]
-    vf_indx = df[colnames[0]].iloc[(df[colnames[0]]-vf).abs().argsort()[:1] ].index[0]
-    
-    x = df[colnames[0]][vi_indx:vf_indx].values
-    y = df[colnames[1]][vi_indx:vf_indx].values*1e12
-    
-    
-    model = lmfit.Model(parabola)
-    results = model.fit(y, x=x, A =y.max(),B = x[y.argmin()] , C = y.min() )
-    yeval = results.best_fit
-    y0    = results.init_fit
-    return x,y0,yeval,results.params.get("B").value
 
 def fitLinear(expobj,vi,vf):
     
@@ -320,6 +301,25 @@ def fitLinear(expobj,vi,vf):
     x = df[colnames[0]][vi_indx:vf_indx].values
     y = df[colnames[1]][vi_indx:vf_indx].values*1e12
     
+    model = lmfit.Model(line)
+    results = model.fit(y, x=x, A =(y.max()-y.min())/(x.max()-x.min()) ,B = np.abs(y).min() )
+    yeval = results.best_fit
+    y0    = results.init_fit
+
+    return x,y0,yeval,-results.params.get("B").value/results.params.get("A").value,results.params.get("A").value
+
+def fitLinear2(df,vi,vf):
+    
+    def line(x, A,B):
+        return A*x + B
+
+
+    colnames = df.columns
+    vi_indx = df[colnames[0]].iloc[(df[colnames[0]]-vi).abs().argsort()[:1] ].index[0]
+    vf_indx = df[colnames[0]].iloc[(df[colnames[0]]-vf).abs().argsort()[:1] ].index[0]
+    
+    x = df[colnames[0]][vi_indx:vf_indx].values
+    y = df[colnames[1]][vi_indx:vf_indx].values*1e12
     
     model = lmfit.Model(line)
     results = model.fit(y, x=x, A =(y.max()-y.min())/(x.max()-x.min()) ,B = np.abs(y).min() )
@@ -328,6 +328,58 @@ def fitLinear(expobj,vi,vf):
 
     return x,y0,yeval,-results.params.get("B").value/results.params.get("A").value,results.params.get("A").value
 
+
+
+def fitLinear_batch_np(traces_np, vi, vf):
+    """
+    Parameters
+    ----------
+    traces_np : list of np.ndarray
+        Each array shape (N, 3): columns [x, y, <ignored>].
+    vi, vf : float
+        Start/stop x-values for the fit window (same as in fitLinear).
+
+    Returns
+    -------
+    avg_grad : float
+    avg_xint : float
+    std_grad : float
+    std_xint : float
+    """
+    grads = []
+    xints = []
+
+    for arr in traces_np:
+        if not isinstance(arr, np.ndarray) or arr.ndim != 2 or arr.shape[1] < 2:
+            print("Skipping invalid trace in fitLinear_batch_np")
+            continue  # skip invalid
+        # make a DataFrame compatible with your fitLinear
+        df = pd.DataFrame(arr[:, :3], columns=["x", "y", "z"])
+
+
+        try:
+            # fitLinear returns: x, y0, yeval, x_intercept, slope
+            _, _, _, xint, grad = fitLinear2(df, vi, vf)
+            if np.isfinite(grad) and np.isfinite(xint):
+                grads.append(float(grad))
+                xints.append(float(xint))
+        except Exception:
+            # skip traces that fail to fit
+            continue
+
+    if not grads:
+        raise ValueError("No valid fits were produced from the provided traces.")
+
+    grads = np.asarray(grads, dtype=float)
+    xints = np.asarray(xints, dtype=float)
+
+    avg_grad = float(grads.mean())
+    avg_xint = float(xints.mean())
+    # sample std if >1 item, else 0.0
+    std_grad = float(grads.std(ddof=1)) if grads.size > 1 else 0.0
+    std_xint = float(xints.std(ddof=1)) if xints.size > 1 else 0.0
+
+    return avg_grad, avg_xint, std_grad, std_xint
 
 
 def freqSweep(indxs,expobj,rm):
