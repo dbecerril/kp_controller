@@ -25,3 +25,6 @@ INITIAL_DEMOD2 = "Phase"        # e.g. "Phase"
 INITIAL_FREQ_HZ = 180           # e.g. 180
 INITIAL_AMP_V = 0.25            # e.g. 0.25
 INITIAL_SCAN_PARAMS = [-3.00, 3.00, 0.1]  # e.g. [-3.00, 3.00, 0.1] for start, stop, step
+
+OVERALL_RD_TIMEOUT_S = 3.0     # overall time to wait for * or ?
+INTER_CHAR_DELAY = 0.01        
