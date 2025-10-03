@@ -27,6 +27,8 @@ from tabs import sweeptab,exptab,lockintab
 from config import constants
 from PyQt5.QtWidgets import QSplitter, QSizePolicy
 from PyQt5.QtWidgets import QSizePolicy
+from PyQt5.QtWidgets import QProgressBar
+
 DICT_TC_TO_SEC = constants.DICT_TC_TO_SEC
 import tabs
 from threads.scan_worker import Worker
@@ -161,15 +163,33 @@ class Window(QWidget):
         self.botbox.addWidget(QLabel("Phi:"),3)
         self.botbox.addWidget(self.label_currentPhi,3)
         self.botbox.addWidget(QLabel("deg"),3)
+        # Progress bar (busy indicator)
+        self.progress = QProgressBar()
+        self.progress.setTextVisible(False)
+        self.progress.setMaximumHeight(14)     # slim
+        self.progress.setFixedWidth(220)       # tweak width to taste
+        self.progress.hide()  
         
         self.label_status = QLabel("Status:")
         self.botbox.addWidget(self.label_status,82 )
+        self.botbox.addWidget(self.progress, 10)            
 
         self.experimentTabUI.button_save.clicked.connect(self.save_current_scan)
 
         layout.addWidget(main_splitter,1)
         layout.addLayout(self.botbox,0)    
                 
+    def start_busy(self, msg="Running..."):
+        # indeterminate progress
+        self.progress.setRange(0, 0)   # 0,0 = busy/marquee
+        self.progress.show()
+        self.label_status.setText(f"Status: {msg}")
+
+    def stop_busy(self, msg="Done."):
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.hide()
+        self.label_status.setText(f"Status: {msg}")
 
     def _on_session_data_imported(self, df: pd.DataFrame):
         """Receive imported data from SessionTab and adopt it as the current session."""
@@ -348,16 +368,29 @@ class Window(QWidget):
 ### Logic Functions  start here
 ###################################
     def stopScan(self):
+        """
+        Ask the scan worker to stop. Keep the busy bar spinning until the thread
+        actually finishes (thread.finished will call stop_busy).
+        """
+        # Tell the worker to stop (your worker listens to signalWorker)
         try:
             self.signalWorker.emit()
-        except:
-            print("No thread")
+            self.label_status.setText("Status: Stopping scan…")
+            # do NOT call stop_busy here; wait for thread.finished
+        except Exception:
+            # If there is no thread/worker, just clear the busy state safely
+            self.stop_busy("Scan stopped (no active worker).")
 
     def stopSweep(self):
+        """
+        Ask the sweep worker to stop. Keep the busy bar spinning until finished.
+        """
         try:
             self.sweepTabUI.signalWorker.emit()
-        except:
-            print("No thread")
+            self.label_status.setText("Status: Stopping sweep…")
+            # do NOT call stop_busy here; wait for thread.finished
+        except Exception:
+            self.stop_busy("Sweep stopped (no active worker).")
 
     def set_params(self):
         self.timer.stop()
@@ -411,7 +444,7 @@ class Window(QWidget):
         time_between_scans = self.experimentTabUI.box_delay.text() 
         avgmultiscans = False
         #savedata = self.experimentTabUI.CkBox_savedata.isChecked()
-
+        self.start_busy("Scanning…")
         #tc_pointdelay = float( self.experimentTabUI.box_pointdelay.text() )
         self.thread = QThread()
 
@@ -446,6 +479,7 @@ class Window(QWidget):
         self.thread.finished.connect(
             lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
+        self.thread.finished.connect(lambda: self.stop_busy("Scan complete."))
     def on_dynamics_data_ready(self, t, y, label):
     # Plot on the right-side plot
         self.updateDynamicsPlot(t, y, ylabel=label)
@@ -570,7 +604,7 @@ class Window(QWidget):
         self.plot_graph.clear()
         self.expsettings.datatemp = pd.DataFrame([])
         self.timer.stop()
-
+        self.start_busy("Sweeping…")
         #tc_pointdelay = float( self.experimentTabUI.box_pointdelay.text() )
         self.thread = QThread()
         fi = float( self.sweepTabUI.box_fi.text())
@@ -602,7 +636,7 @@ class Window(QWidget):
         self.thread.finished.connect(
             lambda: self.timer.start(constants.DELAY_TIMER_MS)
         )
-                    
+        self.thread.finished.connect(lambda: self.stop_busy("Sweep complete."))                   
 
                 
 if __name__ == "__main__":
