@@ -42,8 +42,8 @@ class sweepWorker(QObject) :
         #print("Centering phase, zeroing dac1...\n")
         indxs = self.scanoptions
         kputils.Inst_Query_Command_RS232(inst, "AQN", verbose = False)
-        kputils.Inst_Query_Command_RS232(inst, "TC"+time_cte, verbose = False)
-        kputils.Inst_Query_Command_RS232(inst, "SEN"+sens, verbose = False)
+        kputils.Inst_Query_Command_RS232(inst, "TC"+ str(time_cte), verbose = False)
+        kputils.Inst_Query_Command_RS232(inst, "SEN"+ str(sens), verbose = False)
         indxx = kputils.V_to_index(indxs[4])
         kputils.Inst_Query_Command_RS232(inst, "DAC.1" + constants.LIST_VOLTS[indxx]  , verbose = False)
         

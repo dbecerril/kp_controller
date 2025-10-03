@@ -47,7 +47,7 @@ class sweepTab(QWidget):
       fbox = QHBoxLayout()
       fbox.addWidget(QLabel("Freq. start") )
       self.box_fi = QLineEdit(self)
-      self.box_fi.setText("170")
+      self.box_fi.setText("180")
       fbox.addWidget(self.box_fi )
 
       fbox.addWidget(QLabel("Freq. stop") )

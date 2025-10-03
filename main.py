@@ -20,11 +20,13 @@ from PyQt5.QtWidgets import (
 
 from PyQt5.QtWidgets import QTableView, QHeaderView
 from PyQt5.QtCore import QAbstractTableModel, Qt, QVariant
-
+from PyQt5.QtWidgets import QSplitter
 from PyQt5.QtCore import QTimer,QThread,pyqtSignal,QObject
 from PyQt5 import QtGui
 from tabs import sweeptab,exptab,lockintab
 from config import constants
+from PyQt5.QtWidgets import QSplitter, QSizePolicy
+from PyQt5.QtWidgets import QSizePolicy
 DICT_TC_TO_SEC = constants.DICT_TC_TO_SEC
 import tabs
 from threads.scan_worker import Worker
@@ -61,74 +63,89 @@ class Window(QWidget):
         #mainWindow = QWidget()
 
         self.setWindowTitle("Kelvin Probe GUI")
-        self.resize(1000, 450)
+        self.resize(1150, 450)
 
         # Create a top-level layout
         
         layout = QVBoxLayout()
+
         self.setLayout(layout)
-      
-        #Plots and tabs
-        topbox = QHBoxLayout()
-       
-        # status bar and real time measurment
         self.botbox = QHBoxLayout()
-
-
-        tabs = QTabWidget()
         
-        #Exp tab
+        # --- Left: tabs ---
+        tabs_widget = QTabWidget()
+        tabs_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
-        self.experimentTabUI = exptab.expTab(self.expsettings,self.rm)
+        self.experimentTabUI = exptab.expTab(self.expsettings, self.rm)
         self.experimentTabUI.button_start.clicked.connect(self.runScan)
         self.experimentTabUI.button_stop.clicked.connect(self.stopScan)
-        
-        #Sweep tab        
-        self.sweepTabUI = sweeptab.sweepTab(self.expsettings,self.rm)
+
+        self.sweepTabUI = sweeptab.sweepTab(self.expsettings, self.rm)
         self.sweepTabUI.button_start.clicked.connect(self.freqSweep)
         self.sweepTabUI.button_stop.clicked.connect(self.stopSweep)
-        
-        #Lock in Tab
-        self.lockinTabUI = lockintab.lockinTab(self.expsettings,self.rm)
+
+        self.lockinTabUI = lockintab.lockinTab(self.expsettings, self.rm)
         self.lockinTabUI.button_setparams.clicked.connect(self.set_params)
-        
-        # Dynamics Tab
-        #self.dynamicsTabUI = dynamicstab.dynamicsTab(self.expsettings, self.rm)
-        #self.dynamicsTabUI.dataReady.connect(self.on_dynamics_data_ready)
-        # --- Session tab (new) ---
+
         self.sessionTabUI = session.SessionTab()
-        # SessionTab now does its own file dialogs for Import/Export.
-        # Keep "Clear Session" handled in main:
         self.sessionTabUI.clearRequested.connect(self.clear_session)
-        # When the user imports a CSV from the tab, update main's in-memory DF:
         self.sessionTabUI.dataImported.connect(self._on_session_data_imported)
 
-        tabs.addTab(self.experimentTabUI, "Experiment")
-        tabs.addTab(self.lockinTabUI, "Lock-in Settings")
-        tabs.addTab(self.sweepTabUI, "Sweeps")
-        #tabs.addTab(self.dynamicsTabUI, "Dynamics")
-        tabs.addTab(self.sessionTabUI, "Session")
-   
-        plotbox = QVBoxLayout()
+        tabs_widget.addTab(self.experimentTabUI, "Experiment")
+        tabs_widget.addTab(self.lockinTabUI, "Lock-in Settings")
+        tabs_widget.addTab(self.sweepTabUI, "Sweeps")
+        tabs_widget.addTab(self.sessionTabUI, "Session")
+
+        # --- Right: plots (put them in a QWidget so it can be added to splitter) ---
+        right_panel = QWidget()
+        right_vbox = QVBoxLayout(right_panel)
+        right_vbox.setContentsMargins(0, 0, 0, 0)
+        right_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # <-- grows both ways
+
+        # Optional: vertical splitter inside the right side so users can resize the two plots
+        plots_splitter = QSplitter(Qt.Vertical)
+        plots_splitter.setChildrenCollapsible(False)  # don't collapse to zero height
+        plots_splitter.setHandleWidth(6)
+        # Let both plots expand equally by default
+
+
         self.plot_graph = pg.PlotWidget()
         self.plot_graph.setTitle("Current Scan")
         self.plot_graph.setLabel("left", self.expsettings.demod1)
         self.plot_graph.setLabel("bottom", "DAC1 (V)")
 
         self.plot_graph2 = pg.PlotWidget()
-
         self.plot_graph2.setTitle("Bias History")
         self.plot_graph2.setLabel("left", "Bias (V)")
         self.plot_graph2.setLabel("bottom", "Time (min)")
 
-        plotbox.addWidget(self.plot_graph)
+        plots_splitter.addWidget(self.plot_graph)
+        plots_splitter.addWidget(self.plot_graph2)
+        plots_splitter.setStretchFactor(0, 1)
+        plots_splitter.setStretchFactor(1, 1)
+        plots_splitter.setSizes([300, 300])  # initial heights; tweak as you like
 
-        plotbox.addWidget(self.plot_graph2)
+        right_vbox.addWidget(plots_splitter,1)
+
         self.bias_curve = self.plot_graph2.plot([], [], symbol="o", symbolSize=5, symbolBrush="b")
 
-        topbox.addWidget(tabs,25)
-        topbox.addLayout(plotbox,75) 
-        
+        # --- Top-level horizontal splitter between tabs and plots ---
+        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.setChildrenCollapsible(False)
+        main_splitter.setHandleWidth(6)
+        main_splitter.addWidget(tabs_widget)
+        main_splitter.addWidget(right_panel)
+
+        # Initial sizes: 30% left, 70% right (adjust to taste)
+        main_splitter.setStretchFactor(0, 0)
+        main_splitter.setStretchFactor(1, 1)
+        main_splitter.setSizes([int(self.width() * 0.25), int(self.width() * 0.75)])
+
+        # Optional: wider handle so it’s easy to grab
+        main_splitter.setStyleSheet("QSplitter::handle { background: #404040; }")
+
+        # Now add the splitter to your outer layout
+
         # Bottom widget
         self.timer = QTimer(self)
         self.timer.timeout.connect( self.updateMeasure )
@@ -150,8 +167,9 @@ class Window(QWidget):
 
         self.experimentTabUI.button_save.clicked.connect(self.save_current_scan)
 
-        layout.addLayout(topbox)        
-        layout.addLayout(self.botbox)
+        layout.addWidget(main_splitter,1)
+        layout.addLayout(self.botbox,0)    
+                
 
     def _on_session_data_imported(self, df: pd.DataFrame):
         """Receive imported data from SessionTab and adopt it as the current session."""
@@ -318,7 +336,7 @@ class Window(QWidget):
         else:
             # If both were empty (unlikely), initialize with expected columns
             self.session_df = pd.DataFrame(columns=[
-                "timestamp_iso","sample_name","bias_V","gradient",
+                "timestamp_iso","sample_name","bias_V","bias_V_std","gradient","gradient_std","num_scans",
                 "lockin_params_json","scan_params_json","session_name"
             ])
 
